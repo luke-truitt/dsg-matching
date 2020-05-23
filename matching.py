@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import csv
+import datetime
 
 ## Check in common identities they care about
 def get_common_identities(row):
@@ -36,7 +37,6 @@ def get_certifications(row):
 
 ## Nervous
 def get_nervous(row):
-
     return row['Q19']
 
 ## Frequency
@@ -54,36 +54,37 @@ def get_relationship(row):
     return row['Q35']
 ## Saturday Night
 def get_saturday_night(row):
-
     return row['Q26']
 ## Drinking
 def get_drinking(row):
-
     return row['Q21']
-## Hobbies
-def get_hobbies(row):
 
-    return row['Q23'].split(',')
+def get_marijuana(row):
+    return row['Q22']
+
+def get_transfer(row):
+    return row['Q48']
+
 ## Interests - Clubs, Academic Programs
 def get_primary_interests(row):
 
+    affiliations = row['Q16'].split(',')
     clubs = row['Q15'].split(',')
 
-    academic = row['Q18'].split(',')
-
-    clubs.append(academic)
+    clubs.append(affiliations)
 
     return clubs
 ## Interesets - Affiliations, Sports
 def get_secondary_interests(row):
 
-    affiliations = row['Q16'].split(',')
-
+    academic = row['Q18'].split(',')
     sports = row['Q17'].split(',')
+    hobbies = row['Q23'].split(',')
 
-    affiliations.append(sports)
+    academic.append(sports)
+    academic.append(hobbies)
 
-    return affiliations
+    return academic
 
 def identity_not_overlap(mentee, mentor):
 
@@ -129,8 +130,12 @@ def get_freq_score(mentee, mentor):
     score = 0
 
     for i in range(len(mentee_freqs)):
-        if abs(mentee_freqs[i] - mentor_freqs[i]):
+        if mentee_freqs[i] == mentor_freqs[i]:
+            score += 30
+        elif abs(mentee_freqs[i] - mentor_freqs[i]) == 1:
             score += 20
+        else:
+            score -=20
     
     return score
 
@@ -153,17 +158,22 @@ def get_drinking_score(mentee, mentor):
         return 0
     return 30
 
-def get_hobby_score(mentee, mentor):
-    mentee_hobbies = get_hobbies(mentee)
-    mentor_hobbies = get_hobbies(mentor)
-    score = 0
-    for hobby in mentee_hobbies:
-        if hobby in mentor_hobbies:
-            score += 5
-        else:
-            score -= 5
-    
-    return score
+def get_marijuana_score(mentee, mentor):
+    mentee_marijuana = convert_marijuana(get_marijuana(mentee))
+    mentor_marijuana = convert_marijuana(get_marijuana(mentor))
+    diff = abs(mentee_marijuana - mentor_marijuana)
+    if mentee_marijuana == 0 and mentor_marijuana != 0:
+        return -20
+    if diff > 1:
+        return 0
+    return 10
+
+def get_transfer_score(mentee, mentor):
+    mentor_transfer = get_transfer(mentor)
+    mentee_transfer = get_transfer(mentee)
+    if "No" in mentor_transfer and "transfer" in mentee_transfer:
+        return -50
+    return 0
 
 def get_interest_scores(mentee, mentor):
     mentee_primary_interest = get_primary_interests(mentee)
@@ -189,24 +199,28 @@ def get_saturday_score(mentee, mentor):
     mentor_sat = convert_sat(get_saturday_night(mentor))
     diff = abs(mentor_sat - mentee_sat)
 
+    if diff == 0:
+        return 20
+
     if diff > 1:
         return -50
 
     return 0
 
 def convert_sat(ideal_sat):
+    firstword = ideal_sat.split(" ")[0]
     
-    if(ideal_sat == 'Reading a good book'):
+    if(firstword == 'Reading'):
         return 0
-    if(ideal_sat == 'Watching a movie with my best friend'):
+    if(firstword == 'Watching'):
         return 1
-    if(ideal_sat == 'Playing trivia at Krafthouse'):
+    if(firstword == 'Playing'):
         return 2
-    if(ideal_sat == 'Wine night with some close friends'):
+    if(firstword == 'Wine'):
         return 3
-    if(ideal_sat == 'Large party'):
+    if(firstword == 'Large'):
         return 4
-    return 0
+    return -1
 
 def convert_drinking(drink_freq):
     
@@ -221,7 +235,20 @@ def convert_drinking(drink_freq):
     if('heavy' in drink_freq):
         return 4
         
-    return 0
+    return -1
+
+def convert_marijuana(marijuana_freq):
+    
+    if(marijuana_freq == 'No'):
+        return 0
+    if('social' in marijuana_freq):
+        return 1
+    if('moderate' in marijuana_freq):
+        return 2
+    if('regularly' in marijuana_freq):
+        return 3
+        
+    return -1
 
 def convert_sum_freq(time):
     if('Once' in time):
@@ -230,7 +257,7 @@ def convert_sum_freq(time):
         return 1
     if('4' in time):
         return 2
-    return 0
+    return -1
 
 def convert_sem_freq(time):
     if('Once a month' in time):
@@ -242,20 +269,21 @@ def convert_sem_freq(time):
     if('A few times a week'in time):
         return 3
         
-    return 0
+    return -1
 
 def convert_relationship(rel):
+    firstword = rel.split(" ")[0]
     
-    if('Help' in rel):
+    if(firstword=="Help"):
         return 0
-    if('Catch' in rel):
+    if(firstword=="Catch"):
         return 1
-    if('Grab' in rel):
+    if(firstword=="Grab"):
         return 2
-    if('Someone' in rel):
+    if(firstword=="Someone"):
         return 3
         
-    return 0
+    return -1
 
 def get_timezone(row):
     
@@ -279,15 +307,16 @@ def get_matching_score(mentee, mentor):
     time_diff = get_timezone_diff(mentee, mentor)
     score = 0
     if time_diff > 3:
-        score -= 30
+        score -= 50
 
     score += identity_not_overlap(mentee, mentor)
     score += get_major_scores(mentee, mentor)
+    score += get_transfer_score(mentee, mentor)
     score += get_nervous_score(mentee, mentor)
     score += get_freq_score(mentee, mentor)
     score += get_relationship_score(mentee, mentor)
     score += get_drinking_score(mentee, mentor)
-    score += get_hobby_score(mentee, mentor)
+    score += get_marijuana_score(mentee, mentor)
     score += get_interest_scores(mentee, mentor)
     score += get_saturday_score(mentee, mentor)
 
@@ -321,12 +350,12 @@ def elimination_match():
     return pairs
 
 def match():
-    mentors = pd.read_csv('mentor_2.csv')
+    mentors = pd.read_csv('mentor_3.csv')
     mentors.fillna('', inplace = True)
     mentors = mentors.drop([0,1], axis=0)
     mentors = mentors.to_dict('index')
     
-    mentees = pd.read_csv('mentee_2.csv')
+    mentees = pd.read_csv('mentee_3.csv')
     mentees.fillna('', inplace = True)
     mentees = mentees.drop([0,1], axis=0)
     mentees = mentees.to_dict('index')
@@ -355,7 +384,7 @@ def match():
     return pairs
 
 def write_csv_out(pairs):
-    with open('matchings.csv', 'w', newline='') as csv_out:
+    with open('matchings'+str(datetime.datetime.now().strftime("_%m-%d_h%Hm%Ms%S"))+'.csv', 'w', newline='') as csv_out:
         writer = csv.writer(csv_out, delimiter=' ')
         writer.writerow(['Mentor Name', 'Mentor Email', 'Mentee Name', 'Mentee Email'])
         for p in pairs:

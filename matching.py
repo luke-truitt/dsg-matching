@@ -46,7 +46,7 @@ def get_frequencies(row):
 
     sem_freq = row['Q34']
 
-    return [summer_freq, sem_freq]
+    return [convert_sum_freq(summer_freq), convert_sem_freq(sem_freq)]
 
 ## Kind of relationship
 def get_relationship(row):
@@ -85,16 +85,15 @@ def get_secondary_interests(row):
 
     return affiliations
 
-def get_identity_score(mentee, mentor):
+def identity_not_overlap(mentee, mentor):
 
     relevant_identities = get_common_identities(mentee)
     score = 0
     for i in relevant_identities:
-        if mentee[i] == mentor[i]:
-            score += 100
-        else:
+
+        if mentee[i] != mentor[i]:
             score -= 50
-    
+
     return score
 
 def get_major_scores(mentee, mentor):
@@ -103,7 +102,7 @@ def get_major_scores(mentee, mentor):
     mentor_certs = get_certifications(mentor)
     score = 0
     if mentee_certs[0] == mentor_certs[0]:
-        score += 20
+        score += 50
     if mentee_certs[1] == mentor_certs[1]:
         score += 30
     if mentee_certs[2] == mentor_certs[2]:
@@ -130,27 +129,29 @@ def get_freq_score(mentee, mentor):
     score = 0
 
     for i in range(len(mentee_freqs)):
-        if mentee_freqs[i]==mentor_freqs[i]:
+        if abs(mentee_freqs[i] - mentor_freqs[i]):
             score += 20
     
     return score
 
 def get_relationship_score(mentee, mentor):
-    mentee_rel = get_relationship(mentee)
-    mentor_rel = get_relationship(mentor)
-
-    if mentee_rel == mentor_rel:
-        return 20
+    mentee_rel = convert_relationship(get_relationship(mentee))
+    mentor_rel = convert_relationship(get_relationship(mentor))
+    diff = abs(mentee_rel - mentor_rel)
+    if diff > 1:
+        return 0
     
-    return 0
+    return 20
 
 def get_drinking_score(mentee, mentor):
-    mentee_drink = get_drinking(mentee)
-    mentor_drink = get_drinking(mentor)
-
-    if mentee_drink == mentor_drink:
-        return 20
-    return 0
+    mentee_drink = convert_drinking(get_drinking(mentee))
+    mentor_drink = convert_drinking(get_drinking(mentor))
+    diff = abs(mentee_drink - mentor_drink)
+    if mentee_drink == 0 and mentor_drink != 0:
+        return -40
+    if diff > 1:
+        return 0
+    return 30
 
 def get_hobby_score(mentee, mentor):
     mentee_hobbies = get_hobbies(mentee)
@@ -159,6 +160,8 @@ def get_hobby_score(mentee, mentor):
     for hobby in mentee_hobbies:
         if hobby in mentor_hobbies:
             score += 5
+        else:
+            score -= 5
     
     return score
 
@@ -182,18 +185,83 @@ def get_interest_scores(mentee, mentor):
     return score
 
 def get_saturday_score(mentee, mentor):
-    mentee_sat = get_saturday_night(mentee)
-    mentor_sat = get_saturday_night(mentor)
+    mentee_sat = convert_sat(get_saturday_night(mentee))
+    mentor_sat = convert_sat(get_saturday_night(mentor))
+    diff = abs(mentor_sat - mentee_sat)
 
-    if mentee_sat == mentor_sat:
-        return 20
+    if diff > 1:
+        return -50
 
+    return 0
+
+def convert_sat(ideal_sat):
+    print(ideal_sat)
+    if(ideal_sat == 'Reading a good book'):
+        return 0
+    if(ideal_sat == 'Watching a movie with my best friend'):
+        return 1
+    if(ideal_sat == 'Playing trivia at Krafthouse'):
+        return 2
+    if(ideal_sat == 'Wine night with some close friends'):
+        return 3
+    if(ideal_sat == 'Large party'):
+        return 4
+    return 0
+
+def convert_drinking(drink_freq):
+    
+    if(drink_freq == 'No'):
+        return 0
+    if('social' in drink_freq):
+        return 1
+    if('moderate' in drink_freq):
+        return 2
+    if('regularly' in drink_freq):
+        return 3
+    if('heavy' in drink_freq):
+        return 4
+        
+    return 0
+
+def convert_sum_freq(time):
+    if('Once' in time):
+        return 0
+    if('2' in time):
+        return 1
+    if('4' in time):
+        return 2
+    return 0
+
+def convert_sem_freq(time):
+    if('Once a month' in time):
+        return 0
+    if('A few times a month' in time):
+        return 1
+    if('Once a week'in time):
+        return 2
+    if('A few times a week'in time):
+        return 3
+        
+    return 0
+
+def convert_relationship(rel):
+    
+    if('Help' in rel):
+        return 0
+    if('Catch' in rel):
+        return 1
+    if('Grab' in rel):
+        return 2
+    if('Someone' in rel):
+        return 3
+        
     return 0
 
 def get_timezone(row):
     
     f = row['Q9'].split(':')
-    
+    if len(f) == 1:
+        return 0
     s = f[0].split('GMT')[1].strip()
     if s == '':
         return 0
@@ -209,13 +277,11 @@ def get_timezone_diff(mentee, mentor):
 def get_matching_score(mentee, mentor):
 
     time_diff = get_timezone_diff(mentee, mentor)
-
-    if time_diff > 3:
-        return 0
-
     score = 0
+    if time_diff > 3:
+        score -= 30
 
-    score += get_identity_score(mentee, mentor)
+    score += identity_not_overlap(mentee, mentor)
     score += get_major_scores(mentee, mentor)
     score += get_nervous_score(mentee, mentor)
     score += get_freq_score(mentee, mentor)
@@ -226,8 +292,7 @@ def get_matching_score(mentee, mentor):
     score += get_saturday_score(mentee, mentor)
 
     return score
-
-def match():
+def elimination_match():
     mentors = pd.read_csv('mentor.csv')
     mentors.fillna('', inplace = True)
     mentors = mentors.to_dict('index')
@@ -238,6 +303,38 @@ def match():
     num_mentees = len(mentees)
 
     scores = np.zeros((num_mentees, num_mentors))
+    for i, mentee in enumerate(mentees):
+        for j, mentor in enumerate(mentors):
+            
+            scores[j, i] = get_matching_score(mentees[mentee], mentors[mentor])
+    pairs = []
+    print(scores)
+    for i in range(num_mentees):
+        max_val = np.amax(scores[:,i])
+        max_loc = np.where(scores[:,i] == max_val)
+        j = max_loc[0][0]
+        
+        pairs.append({'mentor': mentors[j], 'mentee': mentees[i]})
+        
+        scores[:][j] = -1000
+        
+    return pairs
+
+def match():
+    mentors = pd.read_csv('mentor_2.csv')
+    mentors.fillna('', inplace = True)
+    mentors = mentors.drop([0,1], axis=0)
+    mentors = mentors.to_dict('index')
+    
+    mentees = pd.read_csv('mentee_2.csv')
+    mentees.fillna('', inplace = True)
+    mentees = mentees.drop([0,1], axis=0)
+    mentees = mentees.to_dict('index')
+    
+    num_mentors = len(mentors)
+    num_mentees = len(mentees)
+
+    scores = np.zeros((num_mentors, num_mentees))
     for i, mentee in enumerate(mentees):
         
         for j, mentor in enumerate(mentors):
@@ -250,7 +347,7 @@ def match():
         max_loc = np.where(scores[:,i] == max_val)
         j = max_loc[0][0]
         
-        pairs.append({'mentor': mentors[j], 'mentee': mentees[i]})
+        pairs.append({'mentor': mentors[j+2], 'mentee': mentees[i+2]})
         
         scores[:][j] = -1000
         
@@ -269,4 +366,14 @@ def write_csv_out(pairs):
             data = [mentor_name, mentor_email, mentee_name, mentee_email]
             writer.writerow(data)
 
+def print_pairs(pairs):
+    for p in pairs:
+        mentor_name = p['mentor']['FirstName'] + ' ' + p['mentor']['LastName']
+        mentor_email = p['mentor']['NetIDEmail']
+        mentee_name = p['mentee']['FirstName'] + ' ' + p['mentee']['LastName']
+        mentee_email = p['mentee']['NetIDEmail']
+        data = [mentor_name, mentor_email, mentee_name, mentee_email]
+        print(data)
+pairs = match()
+print_pairs(pairs)
 write_csv_out(match())

@@ -195,7 +195,7 @@ def get_saturday_score(mentee, mentor):
     return 0
 
 def convert_sat(ideal_sat):
-    print(ideal_sat)
+    
     if(ideal_sat == 'Reading a good book'):
         return 0
     if(ideal_sat == 'Watching a movie with my best friend'):
@@ -308,7 +308,7 @@ def elimination_match():
             
             scores[j, i] = get_matching_score(mentees[mentee], mentors[mentor])
     pairs = []
-    print(scores)
+    
     for i in range(num_mentees):
         max_val = np.amax(scores[:,i])
         max_loc = np.where(scores[:,i] == max_val)
@@ -341,7 +341,7 @@ def match():
             
             scores[j, i] = get_matching_score(mentees[mentee], mentors[mentor])
     pairs = []
-    print(scores)
+    
     for i in range(num_mentees):
         max_val = np.amax(scores[:,i])
         max_loc = np.where(scores[:,i] == max_val)

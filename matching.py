@@ -3,7 +3,6 @@ import numpy as np
 import csv
 import datetime
 
-## Check in common identities they care about
 def get_common_identities(row):
     common = row['Q47'].split(',')
     common_qs = []
@@ -26,7 +25,6 @@ def get_common_identities(row):
         common_qs.append('Q38')
     return common_qs
 
-## Check Intended major, minors etc.
 def get_certifications(row):
     school = row['Q11']
     major = row['Q12']
@@ -35,27 +33,20 @@ def get_certifications(row):
 
     return [school, major, minor, cert]
 
-## Nervous
 def get_nervous(row):
     return row['Q19']
 
-## Frequency
 def get_frequencies(row):
-
     summer_freq = row['Q33']
-
     sem_freq = row['Q34']
-
     return [convert_sum_freq(summer_freq), convert_sem_freq(sem_freq)]
 
-## Kind of relationship
 def get_relationship(row):
-
     return row['Q35']
-## Saturday Night
+
 def get_saturday_night(row):
     return row['Q26']
-## Drinking
+
 def get_drinking(row):
     return row['Q21']
 
@@ -65,40 +56,37 @@ def get_marijuana(row):
 def get_transfer(row):
     return row['Q48']
 
-## Interests - Clubs, Academic Programs
-def get_primary_interests(row):
+def get_hometown(row):
+    state = row['Q5']
+    country = row['Q6']
+    return [state, country]
 
+def get_twice(row):
+    return row['Q43'] == "Yes"
+
+def get_primary_interests(row):
     affiliations = row['Q16'].split(',')
     clubs = row['Q15'].split(',')
-
     clubs.append(affiliations)
-
     return clubs
-## Interesets - Affiliations, Sports
-def get_secondary_interests(row):
 
+def get_secondary_interests(row):
     academic = row['Q18'].split(',')
     sports = row['Q17'].split(',')
     hobbies = row['Q23'].split(',')
-
     academic.append(sports)
     academic.append(hobbies)
-
     return academic
 
 def identity_not_overlap(mentee, mentor):
-
     relevant_identities = get_common_identities(mentee)
     score = 0
     for i in relevant_identities:
-
         if mentee[i] != mentor[i]:
             score -= 50
-
     return score
 
 def get_major_scores(mentee, mentor):
-
     mentee_certs = get_certifications(mentee)
     mentor_certs = get_certifications(mentor)
     score = 0
@@ -113,22 +101,26 @@ def get_major_scores(mentee, mentor):
 
     return score
 
-def get_nervous_score(mentee, mentor):
+def get_hometown_score(mentee, mentor):
+    mentee_hometown = get_hometown(mentee)
+    mentor_hometown = get_hometown(mentor)
+    if mentee_hometown[0]==mentor_hometown[0] or mentee_hometown[1]==mentor_hometown[1]:
+        return 10
+    return 0
 
+
+def get_nervous_score(mentee, mentor):
     mentee_nervous = get_nervous(mentee)
     mentor_nervous = get_nervous(mentor)
-
     if mentee_nervous == mentor_nervous:
         return 20
     else:
         return 0
 
 def get_freq_score(mentee, mentor):
-
     mentee_freqs = get_frequencies(mentee)
     mentor_freqs = get_frequencies(mentor)
     score = 0
-
     for i in range(len(mentee_freqs)):
         if mentee_freqs[i] == mentor_freqs[i]:
             score += 30
@@ -136,7 +128,6 @@ def get_freq_score(mentee, mentor):
             score += 20
         else:
             score -=20
-    
     return score
 
 def get_relationship_score(mentee, mentor):
@@ -145,7 +136,6 @@ def get_relationship_score(mentee, mentor):
     diff = abs(mentee_rel - mentor_rel)
     if diff > 1:
         return 0
-    
     return 20
 
 def get_drinking_score(mentee, mentor):
@@ -319,6 +309,7 @@ def get_matching_score(mentee, mentor):
     score += get_marijuana_score(mentee, mentor)
     score += get_interest_scores(mentee, mentor)
     score += get_saturday_score(mentee, mentor)
+    score += get_hometown_score(mentee, mentor)
 
     return score
 def elimination_match():
@@ -350,12 +341,12 @@ def elimination_match():
     return pairs
 
 def match():
-    mentors = pd.read_csv('mentor_3.csv')
+    mentors = pd.read_csv('mentor.csv')
     mentors.fillna('', inplace = True)
     mentors = mentors.drop([0,1], axis=0)
     mentors = mentors.to_dict('index')
     
-    mentees = pd.read_csv('mentee_3.csv')
+    mentees = pd.read_csv('mentee.csv')
     mentees.fillna('', inplace = True)
     mentees = mentees.drop([0,1], axis=0)
     mentees = mentees.to_dict('index')
@@ -363,11 +354,11 @@ def match():
     num_mentors = len(mentors)
     num_mentees = len(mentees)
 
+    mentortwice = []
+
     scores = np.zeros((num_mentors, num_mentees))
     for i, mentee in enumerate(mentees):
-        
         for j, mentor in enumerate(mentors):
-            
             scores[j, i] = get_matching_score(mentees[mentee], mentors[mentor])
     pairs = []
     
@@ -375,11 +366,12 @@ def match():
         max_val = np.amax(scores[:,i])
         max_loc = np.where(scores[:,i] == max_val)
         j = max_loc[0][0]
-        
         pairs.append({'mentor': mentors[j+2], 'mentee': mentees[i+2]})
         
-        scores[:][j] = -1000
-        
+        if get_twice(mentors[j+2]) and mentors[j+2] not in mentortwice:
+            mentortwice.append(mentors[j+2])
+        else:
+            scores[:][j] = -1000
 
     return pairs
 
